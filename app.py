@@ -1,42 +1,68 @@
-import os
-import shutil
 import gradio as gr
 
 from modules.eee.workflow import run_eee
+from modules.fe.workflow import run_fe
+from modules.ce.workflow import run_ce
+from modules.online.workflow import run_online
 
 
-UPLOAD_FOLDER = "uploads"
-OUTPUT_FOLDER = "outputs"
+APP_TITLE = "Kenya School of Government Evaluation Agent"
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+APP_DESCRIPTION = """
+Generate institutional evaluation reports automatically.
 
+Supported modules:
 
-def generate_report(
+• End of Event Evaluation (EEE)
+
+• Facilitator Evaluation (FE)
+
+• Coordinator Evaluation (CE)
+
+• Online End of Event Evaluation
+
+Upload the evaluation file, enter the programme details, and generate a professionally formatted report.
+"""
+
+def process_report(
+
+    evaluation_type,
+
     uploaded_file,
+
+    programme_title,
+
+    programme_code,
+
     duration,
+
+    venue,
+
+    coordinator,
+
+    assistant,
+
+    total_participants,
+
     use_llm
+
 ):
-    """
-    Generates an EEE report.
-    """
 
     if uploaded_file is None:
-        return None, "Please upload an Excel file."
 
-    # Copy uploaded file
-    destination = os.path.join(
-        UPLOAD_FOLDER,
-        os.path.basename(uploaded_file)
-    )
+        raise gr.Error("Please upload an evaluation file.")
 
-    shutil.copy(uploaded_file, destination)
+    file_path = uploaded_file.name
 
-    try:
+    # =====================================================
+    # END OF EVENT EVALUATION
+    # =====================================================
+    if evaluation_type == "End of Event Evaluation":
 
+        
         report = run_eee(
 
-            excel_file=destination,
+            excel_file=file_path,
 
             duration=duration,
 
@@ -44,96 +70,259 @@ def generate_report(
 
             generate_analysis=True,
 
-            output_folder=OUTPUT_FOLDER
+            output_folder="outputs"
+
+  )
+        return report
+
+    # =====================================================
+    # FACILITATOR EVALUATION
+    # =====================================================
+    elif evaluation_type == "Facilitator Evaluation":
+
+        report = run_fe(
+
+            excel_file=file_path,
+
+            programme_title=programme_title,
+
+            programme_code=programme_code,
+
+            duration=duration,
+
+            venue=venue,
+
+            coordinator=coordinator,
+
+            assistant=assistant,
+
+            total_participants=int(total_participants),
+
+            use_llm=use_llm,
+
+            generate_analysis=True,
+
+            output_folder="outputs"
 
         )
 
-        return report, "✅ Report generated successfully."
+        return report
 
-    except Exception as e:
+    # =====================================================
+    # COORDINATOR EVALUATION
+    # =====================================================
+    elif evaluation_type == "Coordinator Evaluation":
 
-        return None, f"❌ {str(e)}"
+        report = run_ce(
 
+            excel_file=file_path,
 
+            programme_title=programme_title,
+
+            programme_code=programme_code,
+
+            duration=duration,
+
+            venue=venue,
+
+            coordinator=coordinator,
+
+            assistant=assistant,
+
+            generate_analysis=True,
+
+            output_folder="outputs"
+
+        )
+
+        return report
+
+    # =====================================================
+    # ONLINE END OF EVENT EVALUATION
+    # =====================================================
+    elif evaluation_type == "Online End of Event Evaluation":
+
+        report = run_online(
+
+            csv_file=file_path,
+
+            programme_title=programme_title,
+
+            programme_code=programme_code,
+
+            duration=duration,
+
+            venue=venue,
+
+            coordinator=coordinator,
+
+            assistant=assistant,
+
+            output_folder="outputs"
+
+        )
+
+        return report
+
+    else:
+
+        raise gr.Error("Invalid evaluation type selected.")
+
+# =====================================================
+# USER INTERFACE
+# =====================================================
 with gr.Blocks(
-    title="KSG Evaluation Intelligence System"
+    title=APP_TITLE
 ) as app:
 
-    gr.Markdown(
-        """
-# Kenya School of Government
+    gr.Markdown(f"# {APP_TITLE}")
 
-## Evaluation Intelligence System
-
-Generate End-of-Event Evaluation reports in one click.
-"""
-    )
+    gr.Markdown(APP_DESCRIPTION)
 
     with gr.Row():
 
-        uploaded_file = gr.File(
-            label="Upload Evaluation Excel File",
-            file_types=[".xlsx", ".xls"]
+        evaluation_type = gr.Dropdown(
+
+            choices=[
+
+                "End of Event Evaluation",
+
+                "Facilitator Evaluation",
+
+                "Coordinator Evaluation",
+
+                "Online End of Event Evaluation"
+
+            ],
+
+            label="Evaluation Type",
+
+            value="End of Event Evaluation"
+
         )
 
-    duration = gr.Textbox(
+    uploaded_file = gr.File(
 
-        label="Duration",
+        label="Upload Evaluation File"
 
-        placeholder="Example: 3rd May 2026 to 10th May 2026"
+    )
+
+    gr.Markdown("## Programme Details")
+
+    with gr.Row():
+
+        programme_title = gr.Textbox(
+
+            label="Programme Title"
+
+        )
+
+        programme_code = gr.Textbox(
+
+            label="Programme Code"
+
+        )
+
+    with gr.Row():
+
+        duration = gr.Textbox(
+
+            label="Duration"
+
+        )
+
+        venue = gr.Textbox(
+
+            label="Venue"
+
+        )
+
+    with gr.Row():
+
+        coordinator = gr.Textbox(
+
+            label="Coordinator"
+
+        )
+
+        assistant = gr.Textbox(
+
+            label="Programme Assistant"
+
+        )
+
+    total_participants = gr.Number(
+
+        label="Total Participants",
+
+        value=0,
+
+        precision=0
 
     )
 
     use_llm = gr.Checkbox(
 
-        value=True,
+        label="Use AI-enhanced Report",
 
-        label="AI Enhanced Report"
+        value=True
 
     )
 
-    generate = gr.Button(
+    generate_btn = gr.Button(
 
-        "🚀 Generate Report",
+        "Generate Report",
 
         variant="primary"
 
     )
 
-    status = gr.Textbox(
+    output_file = gr.File(
 
-        label="Status"
-
-    )
-
-    report_file = gr.File(
-
-        label="Download Report"
+        label="Generated Report"
 
     )
 
-    generate.click(
+    generate_btn.click(
 
-        fn=generate_report,
+        fn=process_report,
 
         inputs=[
 
+            evaluation_type,
+
             uploaded_file,
 
+            programme_title,
+
+            programme_code,
+
             duration,
+
+            venue,
+
+            coordinator,
+
+            assistant,
+
+            total_participants,
 
             use_llm
 
         ],
 
-        outputs=[
-
-            report_file,
-
-            status
-
-        ]
+        outputs=output_file
 
     )
+# =====================================================
+# LAUNCH APPLICATION
+# =====================================================
+if __name__ == "__main__":
 
-app.launch(share=True)
+    app.launch(
+
+        inbrowser=True,
+
+        show_error=True
+
+    )
