@@ -1,4 +1,5 @@
 import gradio as gr
+import os
 
 from modules.eee.workflow import run_eee
 from modules.fe.workflow import run_fe
@@ -319,10 +320,9 @@ with gr.Blocks(
 # =====================================================
 if __name__ == "__main__":
 
+    
     app.launch(
-
-        inbrowser=True,
-
+        server_name="0.0.0.0",
+        server_port=int(os.environ.get("PORT", 7860)),
         show_error=True
-
-    )
+   )
