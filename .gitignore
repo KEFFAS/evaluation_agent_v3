@@ -1,0 +1,16 @@
+# Virtual Environment
+venv/
+
+# Environment Variables
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Outputs
+outputs/
+
+# Generated reports
+*.docx
+*.xlsx
