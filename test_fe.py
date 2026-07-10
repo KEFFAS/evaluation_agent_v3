@@ -1,7 +1,7 @@
 from modules.fe.workflow import run_fe
 
 report = run_fe(
-    excel_file=r"uploads\SSDC 60 FE.xlsx",
+    excel_file=r"uploads\prcc 17 FE.xlsx",
 
     programme_title="Supervisory Skills Development Course",
 
@@ -15,7 +15,7 @@ report = run_fe(
 
     assistant="Jane Doe",
 
-    total_participants=72,
+    total_participants=60,
 
     use_llm=True,
 

@@ -1,7 +1,22 @@
 import os
 import pandas as pd
 from openpyxl.styles import Font
+import re
 
+def clean_sheet_name(name):
+    """
+    Make a valid Excel worksheet name.
+    """
+    name = str(name)
+
+    # Replace invalid Excel sheet characters
+    name = re.sub(r'[:\\/*?\[\]]', '-', name)
+
+    # Remove leading/trailing spaces
+    name = name.strip()
+
+    # Excel limit
+    return name[:31]
 
 def analyze_fe(
     cleaned_file,
@@ -275,7 +290,7 @@ def analyze_fe(
 
             )
 
-            sheet_name = str(session)[:31]
+            sheet_name = clean_sheet_name(session)
 
             result_df.to_excel(
 
