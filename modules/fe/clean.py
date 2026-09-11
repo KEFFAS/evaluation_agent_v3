@@ -3,12 +3,27 @@ import pandas as pd
 from openpyxl.styles import Font
 
 
+# =========================================================
+# CLEAN FACILITATOR EVALUATION DATA
+# =========================================================
+
 def clean_fe(
     file_name,
     output_folder="outputs"
 ):
     """
-    Cleans Facilitator Evaluation raw data.
+    Cleans raw Facilitator Evaluation data.
+
+    The function:
+    - Removes introductory rows
+    - Detects and sets the header row
+    - Removes empty rows and unnamed columns
+    - Standardizes column names
+    - Cleans text values
+    - Preserves missing values
+    - Converts rating columns to numeric values
+    - Reorders columns
+    - Saves a cleaned Excel workbook
 
     Parameters
     ----------
@@ -24,45 +39,78 @@ def clean_fe(
         Path to the cleaned Excel file.
     """
 
-    os.makedirs(output_folder, exist_ok=True)
+    # =====================================================
+    # CREATE OUTPUT FOLDER
+    # =====================================================
 
-    # =========================================================
-    # LOAD FILE
-    # =========================================================
-    df = pd.read_excel(file_name, header=None)
+    os.makedirs(
+        output_folder,
+        exist_ok=True
+    )
 
-    print("Original shape:", df.shape)
+    # =====================================================
+    # LOAD RAW FILE
+    # =====================================================
 
-    # =========================================================
+    df = pd.read_excel(
+        file_name,
+        header=None
+    )
+
+    print(
+        "Original shape:",
+        df.shape
+    )
+
+    # =====================================================
     # REMOVE FIRST ROW
-    # =========================================================
-    df = df.iloc[1:].reset_index(drop=True)
+    # =====================================================
 
-    # =========================================================
+    df = (
+        df
+        .iloc[1:]
+        .reset_index(drop=True)
+    )
+
+    # =====================================================
     # SET HEADER
-    # =========================================================
+    # =====================================================
+
     df.columns = df.iloc[0]
-    df = df[1:].reset_index(drop=True)
 
-    # =========================================================
-    # REMOVE EMPTY ROWS
-    # =========================================================
-    df = df.dropna(how="all")
+    df = (
+        df
+        .iloc[1:]
+        .reset_index(drop=True)
+    )
 
-    # =========================================================
+    # =====================================================
+    # REMOVE FULLY EMPTY ROWS
+    # =====================================================
+
+    df = df.dropna(
+        how="all"
+    )
+
+    # =====================================================
     # REMOVE UNNAMED COLUMNS
-    # =========================================================
+    # =====================================================
+
     df = df.loc[
         :,
-        ~df.columns.astype(str).str.contains(
+        ~df.columns
+        .astype(str)
+        .str.contains(
             "unnamed",
-            case=False
+            case=False,
+            na=False
         )
     ]
 
-    # =========================================================
+    # =====================================================
     # CLEAN COLUMN NAMES
-    # =========================================================
+    # =====================================================
+
     df.columns = (
         df.columns
         .astype(str)
@@ -70,62 +118,161 @@ def clean_fe(
         .str.title()
     )
 
-    # =========================================================
+    # =====================================================
+    # STANDARDIZE COLUMN NAMES
+    # =====================================================
+
+    rename_map = {
+
+        "Programme Title":
+            "Program Title",
+
+        "Program":
+            "Program Title",
+
+        "Facilitator":
+            "Lecturer Name",
+
+        "Lecturer":
+            "Lecturer Name",
+
+        "Topic":
+            "Topic Description",
+
+        "Session Topic":
+            "Topic Description"
+    }
+
+    df = df.rename(
+        columns=rename_map
+    )
+
+    # =====================================================
+    # REMOVE DUPLICATE COLUMN NAMES
+    # =====================================================
+
+    df = df.loc[
+        :,
+        ~df.columns.duplicated()
+    ]
+
+    # =====================================================
     # CLEAN TEXT VALUES
-    # =========================================================
+    # =====================================================
+
     for col in df.columns:
 
         if df[col].dtype == "object":
 
             df[col] = (
+
                 df[col]
-                .astype(str)
-                .str.strip()
+
+                .apply(
+                    lambda x:
+                    str(x).strip()
+                    if pd.notna(x)
+                    else pd.NA
+                )
             )
 
-    # =========================================================
-    # CONVERT NUMERIC COLUMNS
-    # =========================================================
+            # Replace empty strings with missing values
+
+            df[col] = df[col].replace(
+
+                "",
+
+                pd.NA
+            )
+
+    # =====================================================
+    # RATING COLUMNS
+    # =====================================================
+
+    rating_columns = [
+
+        "Punctuality",
+
+        "Presentation Flow",
+
+        "Handling Questions",
+
+        "Active Participation Of Learners",
+
+        "Use Of Visual Aids",
+
+        "Relevance Of Subject To Workplace",
+
+        "Use Of Relevant Examples",
+
+        "Knowledge Of Subject",
+
+        "Treats Participants With Dignity And Respect",
+
+        "Variety And Appropriateness Of Training Methods"
+    ]
+
+    # =====================================================
+    # CONVERT RATINGS TO NUMERIC
+    # =====================================================
+
+    for col in rating_columns:
+
+        if col in df.columns:
+
+            df[col] = pd.to_numeric(
+
+                df[col],
+
+                errors="coerce"
+            )
+
+            # Keep only valid FE ratings
+
+            df[col] = df[col].where(
+
+                df[col].isin(
+
+                    [1, 2, 3, 4, 5]
+                )
+            )
+
+            # Convert to nullable integer
+
+            df[col] = df[col].astype(
+                "Int64"
+            )
+
+    # =====================================================
+    # CONVERT OTHER MOSTLY NUMERIC COLUMNS
+    # =====================================================
+
     for col in df.columns:
 
+        if col in rating_columns:
+
+            continue
+
         converted = pd.to_numeric(
+
             df[col],
+
             errors="coerce"
         )
 
-        if converted.notna().sum() > len(df) * 0.5:
+        # Convert only if majority of values are numeric
+
+        if converted.notna().sum() > (
+
+            len(df) * 0.5
+        ):
 
             df[col] = converted
 
-    # =========================================================
-    # CONVERT WHOLE NUMBERS TO INTEGER
-    # =========================================================
-    for col in df.select_dtypes(include="number").columns:
-
-        if (df[col].dropna() % 1 == 0).all():
-
-            df[col] = df[col].astype("Int64")
-
-    # =========================================================
-    # STANDARDIZE COLUMN NAMES
-    # =========================================================
-    rename_map = {
-
-        "Programme Title": "Program Title",
-
-        "Facilitator": "Lecturer Name",
-
-        "Lecturer": "Lecturer Name",
-
-        "Topic": "Topic Description"
-
-    }
-
-    df = df.rename(columns=rename_map)
-
-    # =========================================================
+    # =====================================================
     # REORDER COLUMNS
-    # =========================================================
+    # =====================================================
+
     desired_order = [
 
         "Date",
@@ -167,7 +314,6 @@ def clean_fe(
         "Timetable No",
 
         "Campus"
-
     ]
 
     existing_cols = [
@@ -177,7 +323,6 @@ def clean_fe(
         for col in desired_order
 
         if col in df.columns
-
     ]
 
     remaining_cols = [
@@ -187,7 +332,6 @@ def clean_fe(
         for col in df.columns
 
         if col not in existing_cols
-
     ]
 
     df = df[
@@ -195,29 +339,77 @@ def clean_fe(
         remaining_cols
     ]
 
-    # =========================================================
-    # SORT BY TOPIC
-    # =========================================================
+    # =====================================================
+    # REMOVE INVALID RECORDS
+    # =====================================================
+
+    if "Lecturer Name" in df.columns:
+
+        df = df.dropna(
+
+            subset=[
+                "Lecturer Name"
+            ]
+        )
+
     if "Topic Description" in df.columns:
+
+        df = df.dropna(
+
+            subset=[
+                "Topic Description"
+            ]
+        )
+
+    # =====================================================
+    # SORT DATA
+    # =====================================================
+
+    sort_columns = [
+
+        col
+
+        for col in [
+
+            "Lecturer Name",
+
+            "Topic Description"
+
+        ]
+
+        if col in df.columns
+    ]
+
+    if sort_columns:
 
         df = (
 
             df
 
-            .sort_values("Topic Description")
+            .sort_values(
 
-            .reset_index(drop=True)
+                sort_columns
+            )
 
+            .reset_index(
+                drop=True
+            )
         )
 
-    print("Cleaned shape:", df.shape)
+    print(
+        "Cleaned shape:",
+        df.shape
+    )
 
-    # =========================================================
-    # SAVE CLEANED FILE
-    # =========================================================
+    # =====================================================
+    # OUTPUT FILE NAME
+    # =====================================================
+
     base_name = os.path.splitext(
 
-        os.path.basename(file_name)
+        os.path.basename(
+            file_name
+        )
 
     )[0]
 
@@ -226,15 +418,17 @@ def clean_fe(
         output_folder,
 
         f"{base_name}_cleaned.xlsx"
-
     )
+
+    # =====================================================
+    # SAVE CLEANED FILE
+    # =====================================================
 
     with pd.ExcelWriter(
 
         output_file,
 
         engine="openpyxl"
-
     ) as writer:
 
         df.to_excel(
@@ -244,15 +438,66 @@ def clean_fe(
             index=False,
 
             sheet_name="Cleaned Data"
-
         )
 
-        worksheet = writer.sheets["Cleaned Data"]
+        worksheet = writer.sheets[
+            "Cleaned Data"
+        ]
+
+        # Bold headers
 
         for cell in worksheet[1]:
 
-            cell.font = Font(bold=True)
+            cell.font = Font(
+                bold=True
+            )
 
-    print(f"✅ Cleaned file saved as: {output_file}")
+        # Adjust column widths
+
+        for column_cells in worksheet.columns:
+
+            max_length = 0
+
+            column_letter = (
+
+                column_cells[0]
+                .column_letter
+            )
+
+            for cell in column_cells:
+
+                try:
+
+                    if cell.value:
+
+                        max_length = max(
+
+                            max_length,
+
+                            len(
+                                str(
+                                    cell.value
+                                )
+                            )
+                        )
+
+                except Exception:
+
+                    pass
+
+            adjusted_width = min(
+
+                max_length + 2,
+
+                50
+            )
+
+            worksheet.column_dimensions[
+                column_letter
+            ].width = adjusted_width
+
+    print(
+        f"Cleaned file saved as: {output_file}"
+    )
 
     return output_file
