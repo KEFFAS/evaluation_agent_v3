@@ -87,4 +87,13 @@ def run_online(
 
     print(f"Report File : {report}")
 
-    return report
+    
+    return {
+
+    "cleaned_file": cleaned_file,
+
+    "analysis_file": None,
+
+    "report_file": report
+
+   }

@@ -7,6 +7,10 @@ from modules.ce.workflow import run_ce
 from modules.online.workflow import run_online
 
 
+# =====================================================
+# APPLICATION DETAILS
+# =====================================================
+
 APP_TITLE = "Kenya School of Government Evaluation Agent"
 
 APP_DESCRIPTION = """
@@ -22,37 +26,68 @@ Supported modules:
 
 • Online End of Event Evaluation
 
-Upload the evaluation file, enter the programme details, and generate a professionally formatted report.
+Upload the evaluation file, enter the programme details,
+and generate professionally formatted evaluation outputs.
 """
 
 
 # =====================================================
-# EXTRACT REPORT FILE
+# EXTRACT OUTPUT FILES
 # =====================================================
 
-def get_report_file(result):
+def get_output_files(result):
+    """
+    Standardizes workflow output.
 
-    # If workflow returns a dictionary
+    Expected workflow output:
+
+    {
+        "cleaned_file": "...",
+        "analysis_file": "...",
+        "report_file": "..."
+    }
+    """
+
+    # -----------------------------------------------
+    # WORKFLOW RETURNS DICTIONARY
+    # -----------------------------------------------
+
     if isinstance(result, dict):
+
+        cleaned_file = result.get("cleaned_file")
+
+        analysis_file = result.get("analysis_file")
 
         report_file = result.get("report_file")
 
-        if report_file:
-
-            return report_file
-
-        raise gr.Error(
-            "Report generation completed but no report file was returned."
+        return (
+            cleaned_file,
+            analysis_file,
+            report_file
         )
 
-    # If workflow returns a string path
-    if isinstance(result, (str, os.PathLike)):
+    # -----------------------------------------------
+    # WORKFLOW RETURNS ONLY REPORT PATH
+    # Backward compatibility
+    # -----------------------------------------------
 
-        return str(result)
+    elif isinstance(result, (str, os.PathLike)):
 
-    raise gr.Error(
-        f"Unexpected workflow output type: {type(result)}"
-    )
+        return (
+            None,
+            None,
+            str(result)
+        )
+
+    # -----------------------------------------------
+    # INVALID OUTPUT
+    # -----------------------------------------------
+
+    else:
+
+        raise gr.Error(
+            f"Unexpected workflow output type: {type(result)}"
+        )
 
 
 # =====================================================
@@ -74,6 +109,10 @@ def process_report(
 
 ):
 
+    # =================================================
+    # VALIDATE FILE
+    # =================================================
+
     if uploaded_file is None:
 
         raise gr.Error(
@@ -83,9 +122,9 @@ def process_report(
     file_path = uploaded_file.name
 
 
-    # =====================================================
+    # =================================================
     # END OF EVENT EVALUATION
-    # =====================================================
+    # =================================================
 
     if evaluation_type == "End of Event Evaluation":
 
@@ -103,16 +142,16 @@ def process_report(
 
         )
 
-        return get_report_file(result)
+        return get_output_files(result)
 
 
-    # =====================================================
+    # =================================================
     # FACILITATOR EVALUATION
-    # =====================================================
+    # =================================================
 
     elif evaluation_type == "Facilitator Evaluation":
 
-        if total_participants <= 0:
+        if not total_participants or total_participants <= 0:
 
             raise gr.Error(
                 "Please enter the total number of participants."
@@ -144,12 +183,12 @@ def process_report(
 
         )
 
-        return get_report_file(result)
+        return get_output_files(result)
 
 
-    # =====================================================
+    # =================================================
     # COORDINATOR EVALUATION
-    # =====================================================
+    # =================================================
 
     elif evaluation_type == "Coordinator Evaluation":
 
@@ -175,12 +214,12 @@ def process_report(
 
         )
 
-        return get_report_file(result)
+        return get_output_files(result)
 
 
-    # =====================================================
+    # =================================================
     # ONLINE END OF EVENT EVALUATION
-    # =====================================================
+    # =================================================
 
     elif evaluation_type == "Online End of Event Evaluation":
 
@@ -204,8 +243,12 @@ def process_report(
 
         )
 
-        return get_report_file(result)
+        return get_output_files(result)
 
+
+    # =================================================
+    # INVALID TYPE
+    # =================================================
 
     else:
 
@@ -222,14 +265,22 @@ with gr.Blocks(
     title=APP_TITLE
 ) as app:
 
-    gr.Markdown(f"# {APP_TITLE}")
+    # =================================================
+    # TITLE
+    # =================================================
 
-    gr.Markdown(APP_DESCRIPTION)
+    gr.Markdown(
+        f"# {APP_TITLE}"
+    )
+
+    gr.Markdown(
+        APP_DESCRIPTION
+    )
 
 
-    # =====================================================
+    # =================================================
     # EVALUATION TYPE
-    # =====================================================
+    # =================================================
 
     evaluation_type = gr.Dropdown(
 
@@ -252,9 +303,9 @@ with gr.Blocks(
     )
 
 
-    # =====================================================
+    # =================================================
     # FILE UPLOAD
-    # =====================================================
+    # =================================================
 
     uploaded_file = gr.File(
 
@@ -263,12 +314,18 @@ with gr.Blocks(
     )
 
 
-    # =====================================================
+    # =================================================
     # PROGRAMME DETAILS
-    # =====================================================
+    # =================================================
 
-    gr.Markdown("## Programme Details")
+    gr.Markdown(
+        "## Programme Details"
+    )
 
+
+    # =================================================
+    # ROW 1
+    # =================================================
 
     with gr.Row():
 
@@ -285,6 +342,10 @@ with gr.Blocks(
         )
 
 
+    # =================================================
+    # ROW 2
+    # =================================================
+
     with gr.Row():
 
         duration = gr.Textbox(
@@ -299,6 +360,10 @@ with gr.Blocks(
 
         )
 
+
+    # =================================================
+    # ROW 3
+    # =================================================
 
     with gr.Row():
 
@@ -315,6 +380,10 @@ with gr.Blocks(
         )
 
 
+    # =================================================
+    # TOTAL PARTICIPANTS
+    # =================================================
+
     total_participants = gr.Number(
 
         label="Total Participants",
@@ -326,9 +395,9 @@ with gr.Blocks(
     )
 
 
-    # =====================================================
+    # =================================================
     # AI OPTION
-    # =====================================================
+    # =================================================
 
     use_llm = gr.Checkbox(
 
@@ -339,33 +408,52 @@ with gr.Blocks(
     )
 
 
-    # =====================================================
+    # =================================================
     # GENERATE BUTTON
-    # =====================================================
+    # =================================================
 
     generate_btn = gr.Button(
 
-        "Generate Report",
+        "Generate Evaluation Outputs",
 
         variant="primary"
 
     )
 
 
-    # =====================================================
-    # OUTPUT
-    # =====================================================
+    # =================================================
+    # DOWNLOAD SECTION
+    # =================================================
 
-    output_file = gr.File(
-
-        label="Download Generated Report"
-
+    gr.Markdown(
+        "## Downloads"
     )
 
 
-    # =====================================================
+    with gr.Row():
+
+        cleaned_output = gr.File(
+
+            label="📥 Download Cleaned File"
+
+        )
+
+        analysis_output = gr.File(
+
+            label="📊 Download Analysis File"
+
+        )
+
+        report_output = gr.File(
+
+            label="📄 Download Final Report"
+
+        )
+
+
+    # =================================================
     # BUTTON EVENT
-    # =====================================================
+    # =================================================
 
     generate_btn.click(
 
@@ -395,7 +483,15 @@ with gr.Blocks(
 
         ],
 
-        outputs=output_file
+        outputs=[
+
+            cleaned_output,
+
+            analysis_output,
+
+            report_output
+
+        ]
 
     )
 
@@ -411,7 +507,10 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
 
         server_port=int(
-            os.environ.get("PORT", 7860)
+            os.environ.get(
+                "PORT",
+                7860
+            )
         ),
 
         show_error=True

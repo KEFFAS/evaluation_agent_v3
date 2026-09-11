@@ -111,4 +111,13 @@ def run_ce(
 
     print(f"Report File   : {report}")
 
-    return report
+   
+    return {
+
+    "cleaned_file": cleaned_file,
+
+    "analysis_file": analysis_file,
+
+    "report_file": report
+
+    }

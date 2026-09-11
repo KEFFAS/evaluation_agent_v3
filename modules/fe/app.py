@@ -3,7 +3,7 @@ import os
 import shutil
 from datetime import datetime
 
-from modules.facilitator_evaluation.workflow import run_fe
+from modules.fe.workflow import run_fe
 
 
 # =========================================================
