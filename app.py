@@ -25,43 +25,71 @@ Supported modules:
 Upload the evaluation file, enter the programme details, and generate a professionally formatted report.
 """
 
+
+# =====================================================
+# EXTRACT REPORT FILE
+# =====================================================
+
+def get_report_file(result):
+
+    # If workflow returns a dictionary
+    if isinstance(result, dict):
+
+        report_file = result.get("report_file")
+
+        if report_file:
+
+            return report_file
+
+        raise gr.Error(
+            "Report generation completed but no report file was returned."
+        )
+
+    # If workflow returns a string path
+    if isinstance(result, (str, os.PathLike)):
+
+        return str(result)
+
+    raise gr.Error(
+        f"Unexpected workflow output type: {type(result)}"
+    )
+
+
+# =====================================================
+# PROCESS REPORT
+# =====================================================
+
 def process_report(
 
     evaluation_type,
-
     uploaded_file,
-
     programme_title,
-
     programme_code,
-
     duration,
-
     venue,
-
     coordinator,
-
     assistant,
-
     total_participants,
-
     use_llm
 
 ):
 
     if uploaded_file is None:
 
-        raise gr.Error("Please upload an evaluation file.")
+        raise gr.Error(
+            "Please upload an evaluation file."
+        )
 
     file_path = uploaded_file.name
+
 
     # =====================================================
     # END OF EVENT EVALUATION
     # =====================================================
+
     if evaluation_type == "End of Event Evaluation":
 
-        
-        report = run_eee(
+        result = run_eee(
 
             excel_file=file_path,
 
@@ -73,15 +101,24 @@ def process_report(
 
             output_folder="outputs"
 
-  )
-        return report
+        )
+
+        return get_report_file(result)
+
 
     # =====================================================
     # FACILITATOR EVALUATION
     # =====================================================
+
     elif evaluation_type == "Facilitator Evaluation":
 
-        report = run_fe(
+        if total_participants <= 0:
+
+            raise gr.Error(
+                "Please enter the total number of participants."
+            )
+
+        result = run_fe(
 
             excel_file=file_path,
 
@@ -107,14 +144,16 @@ def process_report(
 
         )
 
-        return report
+        return get_report_file(result)
+
 
     # =====================================================
     # COORDINATOR EVALUATION
     # =====================================================
+
     elif evaluation_type == "Coordinator Evaluation":
 
-        report = run_ce(
+        result = run_ce(
 
             excel_file=file_path,
 
@@ -136,14 +175,16 @@ def process_report(
 
         )
 
-        return report
+        return get_report_file(result)
+
 
     # =====================================================
     # ONLINE END OF EVENT EVALUATION
     # =====================================================
+
     elif evaluation_type == "Online End of Event Evaluation":
 
-        report = run_online(
+        result = run_online(
 
             csv_file=file_path,
 
@@ -163,15 +204,20 @@ def process_report(
 
         )
 
-        return report
+        return get_report_file(result)
+
 
     else:
 
-        raise gr.Error("Invalid evaluation type selected.")
+        raise gr.Error(
+            "Invalid evaluation type selected."
+        )
+
 
 # =====================================================
 # USER INTERFACE
 # =====================================================
+
 with gr.Blocks(
     title=APP_TITLE
 ) as app:
@@ -180,27 +226,35 @@ with gr.Blocks(
 
     gr.Markdown(APP_DESCRIPTION)
 
-    with gr.Row():
 
-        evaluation_type = gr.Dropdown(
+    # =====================================================
+    # EVALUATION TYPE
+    # =====================================================
 
-            choices=[
+    evaluation_type = gr.Dropdown(
 
-                "End of Event Evaluation",
+        choices=[
 
-                "Facilitator Evaluation",
+            "End of Event Evaluation",
 
-                "Coordinator Evaluation",
+            "Facilitator Evaluation",
 
-                "Online End of Event Evaluation"
+            "Coordinator Evaluation",
 
-            ],
+            "Online End of Event Evaluation"
 
-            label="Evaluation Type",
+        ],
 
-            value="End of Event Evaluation"
+        label="Evaluation Type",
 
-        )
+        value="End of Event Evaluation"
+
+    )
+
+
+    # =====================================================
+    # FILE UPLOAD
+    # =====================================================
 
     uploaded_file = gr.File(
 
@@ -208,7 +262,13 @@ with gr.Blocks(
 
     )
 
+
+    # =====================================================
+    # PROGRAMME DETAILS
+    # =====================================================
+
     gr.Markdown("## Programme Details")
+
 
     with gr.Row():
 
@@ -224,6 +284,7 @@ with gr.Blocks(
 
         )
 
+
     with gr.Row():
 
         duration = gr.Textbox(
@@ -237,6 +298,7 @@ with gr.Blocks(
             label="Venue"
 
         )
+
 
     with gr.Row():
 
@@ -252,6 +314,7 @@ with gr.Blocks(
 
         )
 
+
     total_participants = gr.Number(
 
         label="Total Participants",
@@ -262,6 +325,11 @@ with gr.Blocks(
 
     )
 
+
+    # =====================================================
+    # AI OPTION
+    # =====================================================
+
     use_llm = gr.Checkbox(
 
         label="Use AI-enhanced Report",
@@ -269,6 +337,11 @@ with gr.Blocks(
         value=True
 
     )
+
+
+    # =====================================================
+    # GENERATE BUTTON
+    # =====================================================
 
     generate_btn = gr.Button(
 
@@ -278,11 +351,21 @@ with gr.Blocks(
 
     )
 
+
+    # =====================================================
+    # OUTPUT
+    # =====================================================
+
     output_file = gr.File(
 
-        label="Generated Report"
+        label="Download Generated Report"
 
     )
+
+
+    # =====================================================
+    # BUTTON EVENT
+    # =====================================================
 
     generate_btn.click(
 
@@ -315,14 +398,22 @@ with gr.Blocks(
         outputs=output_file
 
     )
+
+
 # =====================================================
 # LAUNCH APPLICATION
 # =====================================================
+
 if __name__ == "__main__":
 
-    
     app.launch(
+
         server_name="0.0.0.0",
-        server_port=int(os.environ.get("PORT", 7860)),
+
+        server_port=int(
+            os.environ.get("PORT", 7860)
+        ),
+
         show_error=True
-   )
+
+    )
