@@ -9,17 +9,14 @@ def analyze_ce(
     """
     Analyze Coordinator Evaluation data.
 
-    Parameters
-    ----------
-    cleaned_file : str
-        Path to cleaned Excel file.
-
-    output_folder : str
-
-    Returns
-    -------
-    str
-        Path to analysis workbook.
+    Generates:
+    - Rating distribution percentages
+    - Mean score for each indicator
+    - Overall Mean Score
+    - Composite Score (%)
+    - Highest-rated indicator
+    - Lowest-rated indicator
+    - Qualitative feedback
     """
 
     os.makedirs(output_folder, exist_ok=True)
@@ -27,6 +24,7 @@ def analyze_ce(
     # =========================================================
     # LOAD CLEANED DATA
     # =========================================================
+
     df = pd.read_excel(cleaned_file)
 
     print("Loaded file:", cleaned_file)
@@ -35,6 +33,7 @@ def analyze_ce(
     # =========================================================
     # PROGRAM DETAILS
     # =========================================================
+
     programme_title = (
         df["Program Title"].iloc[0]
         if "Program Title" in df.columns
@@ -48,82 +47,100 @@ def analyze_ce(
     )
 
     # =========================================================
-    # IDENTIFY RATING COLUMNS
+    # CE RATING COLUMNS
     # =========================================================
+
+    expected_rating_cols = [
+
+        "Organization Of Program Opening And Closing",
+
+        "Briefing Participants And Orientation",
+
+        "Leveling Of Participant Expectations",
+
+        "Communication And Feedback",
+
+        "Management Of Timetable And Facilitators",
+
+        "Monitoring Participants Attendance",
+
+        "Program Evaluation",
+
+        "Action Planning",
+
+        "General Administration Of Program"
+
+    ]
+
     rating_cols = [
 
         col
 
-        for col in df.columns
+        for col in expected_rating_cols
 
-        if df[col].dtype in [
-
-            "int64",
-
-            "float64",
-
-            "Int64"
-
-        ]
+        if col in df.columns
 
     ]
 
-    exclude_cols = [
+    if not rating_cols:
 
-        "Timetable No"
-
-    ]
-
-    rating_cols = [
-
-        col
-
-        for col in rating_cols
-
-        if col not in exclude_cols
-
-    ]
+        raise ValueError(
+            "No Coordinator Evaluation rating columns were found."
+        )
 
     # =========================================================
     # ANALYSIS
     # =========================================================
+
     results = []
+
+    indicator_means = {}
 
     for col in rating_cols:
 
-        counts = df[col].value_counts().to_dict()
-
-        count5 = counts.get(5, 0)
-        count4 = counts.get(4, 0)
-        count3 = counts.get(3, 0)
-        count2 = counts.get(2, 0)
-        count1 = counts.get(1, 0)
-
-        total = (
-
-            count5 +
-
-            count4 +
-
-            count3 +
-
-            count2 +
-
-            count1
-
+        # Convert values safely to numeric
+        ratings = pd.to_numeric(
+            df[col],
+            errors="coerce"
         )
 
-        if total > 0:
+        # Keep only valid ratings 1–5
+        valid_ratings = ratings[
+            ratings.isin([1, 2, 3, 4, 5])
+        ]
 
-            p5 = round(count5 / total * 100, 1)
-            p4 = round(count4 / total * 100, 1)
-            p3 = round(count3 / total * 100, 1)
-            p2 = round(count2 / total * 100, 1)
-            p1 = round(count1 / total * 100, 1)
+        count5 = (valid_ratings == 5).sum()
+        count4 = (valid_ratings == 4).sum()
+        count3 = (valid_ratings == 3).sum()
+        count2 = (valid_ratings == 2).sum()
+        count1 = (valid_ratings == 1).sum()
+
+        total_valid = len(valid_ratings)
+
+        # =====================================================
+        # PERCENTAGES
+        # =====================================================
+
+        if total_valid > 0:
+
+            p5 = round(count5 / total_valid * 100, 1)
+            p4 = round(count4 / total_valid * 100, 1)
+            p3 = round(count3 / total_valid * 100, 1)
+            p2 = round(count2 / total_valid * 100, 1)
+            p1 = round(count1 / total_valid * 100, 1)
+
+            mean_score = round(
+                valid_ratings.mean(),
+                2
+            )
 
         else:
 
             p5 = p4 = p3 = p2 = p1 = 0
+            mean_score = 0
+
+        # Store mean for composite analysis
+        indicator_means[col] = mean_score
 
         results.append([
 
@@ -137,13 +154,16 @@ def analyze_ce(
 
             p2,
 
-            p1
+            p1,
+
+            mean_score
 
         ])
 
     # =========================================================
     # RESULTS TABLE
     # =========================================================
+
     df_out = pd.DataFrame(
 
         results,
@@ -160,23 +180,90 @@ def analyze_ce(
 
             "Fair % : 2",
 
-            "Poor % : 1"
+            "Poor % : 1",
+
+            "Mean"
 
         ]
 
     )
 
     # =========================================================
-    # QUALITATIVE
+    # OVERALL MEAN
     # =========================================================
+
+    valid_means = [
+
+        mean
+
+        for mean in indicator_means.values()
+
+        if mean > 0
+
+    ]
+
+    overall_mean = round(
+
+        sum(valid_means) / len(valid_means),
+
+        2
+
+    ) if valid_means else 0
+
+    # =========================================================
+    # COMPOSITE SCORE
+    # =========================================================
+
+    composite_score = round(
+
+        (overall_mean / 5) * 100,
+
+        1
+
+    ) if overall_mean > 0 else 0
+
+    # =========================================================
+    # HIGHEST AND LOWEST INDICATORS
+    # =========================================================
+
+    if valid_means:
+
+        highest_indicator = max(
+            indicator_means,
+            key=indicator_means.get
+        )
+
+        lowest_indicator = min(
+            indicator_means,
+            key=indicator_means.get
+        )
+
+        highest_score = indicator_means[
+            highest_indicator
+        ]
+
+        lowest_score = indicator_means[
+            lowest_indicator
+        ]
+
+    else:
+
+        highest_indicator = "N/A"
+        lowest_indicator = "N/A"
+
+        highest_score = 0
+        lowest_score = 0
+
+    # =========================================================
+    # QUALITATIVE FEEDBACK
+    # =========================================================
+
     likes = (
 
         "; ".join(
 
             df["Like"]
-
             .dropna()
-
             .astype(str)
 
         )
@@ -192,9 +279,7 @@ def analyze_ce(
         "; ".join(
 
             df["Suggestions"]
-
             .dropna()
-
             .astype(str)
 
         )
@@ -208,6 +293,7 @@ def analyze_ce(
     # =========================================================
     # SAVE
     # =========================================================
+
     base_name = os.path.splitext(
 
         os.path.basename(cleaned_file)
@@ -230,7 +316,9 @@ def analyze_ce(
 
     ) as writer:
 
-        start_row = 0
+        # =====================================================
+        # HEADER INFORMATION
+        # =====================================================
 
         header_df = pd.DataFrame({
 
@@ -238,7 +326,15 @@ def analyze_ce(
 
                 f"Program Title: {programme_title}",
 
-                f"Coordinator Name: {coordinator}"
+                f"Coordinator Name: {coordinator}",
+
+                f"Overall Mean Score: {overall_mean}",
+
+                f"Composite Score: {composite_score}%",
+
+                f"Highest Rated Aspect: {highest_indicator} ({highest_score})",
+
+                f"Lowest Rated Aspect: {lowest_indicator} ({lowest_score})"
 
             ]
 
@@ -254,11 +350,15 @@ def analyze_ce(
 
             header=False,
 
-            startrow=start_row
+            startrow=0
 
         )
 
-        table_start = start_row + 4
+        # =====================================================
+        # ANALYSIS TABLE
+        # =====================================================
+
+        table_start = 8
 
         df_out.to_excel(
 
@@ -274,7 +374,43 @@ def analyze_ce(
 
         worksheet = writer.sheets["Analysis"]
 
-        qual_start = table_start + len(df_out) + 3
+        # =====================================================
+        # ADD OVERALL MEAN ROW
+        # =====================================================
+
+        mean_row = table_start + len(df_out) + 2
+
+        worksheet.cell(
+            row=mean_row,
+            column=1
+        ).value = "OVERALL MEAN"
+
+        worksheet.cell(
+            row=mean_row,
+            column=7
+        ).value = overall_mean
+
+        # =====================================================
+        # ADD COMPOSITE SCORE ROW
+        # =====================================================
+
+        composite_row = mean_row + 1
+
+        worksheet.cell(
+            row=composite_row,
+            column=1
+        ).value = "COMPOSITE SCORE (%)"
+
+        worksheet.cell(
+            row=composite_row,
+            column=7
+        ).value = composite_score
+
+        # =====================================================
+        # QUALITATIVE SECTION
+        # =====================================================
+
+        qual_start = composite_row + 3
 
         worksheet.cell(
 
@@ -282,7 +418,7 @@ def analyze_ce(
 
             column=1
 
-        ).value = "Most Liked:"
+        ).value = "MOST LIKED:"
 
         worksheet.cell(
 
@@ -298,7 +434,7 @@ def analyze_ce(
 
             column=1
 
-        ).value = "Suggestions:"
+        ).value = "SUGGESTIONS:"
 
         worksheet.cell(
 
@@ -307,6 +443,11 @@ def analyze_ce(
             column=1
 
         ).value = suggestions
+
+    print(f"Overall Mean: {overall_mean}")
+    print(f"Composite Score: {composite_score}%")
+    print(f"Highest Aspect: {highest_indicator}")
+    print(f"Lowest Aspect: {lowest_indicator}")
 
     print(f"✅ Analysis saved: {output_file}")
 
