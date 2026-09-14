@@ -22,7 +22,10 @@ def clean_online(
         Path to cleaned Excel file.
     """
 
-    os.makedirs(output_folder, exist_ok=True)
+    os.makedirs(
+        output_folder,
+        exist_ok=True
+    )
 
     # =========================================================
     # LOAD CSV
@@ -34,18 +37,16 @@ def clean_online(
     # =========================================================
     # REMOVE EMPTY ROWS/COLUMNS
     # =========================================================
-    df.dropna(how="all", inplace=True)
-    df.dropna(axis=1, how="all", inplace=True)
+    df.dropna(
+        how="all",
+        inplace=True
+    )
 
-    # =========================================================
-    # REMOVE DUPLICATE HEADER ROWS
-    # =========================================================
-    first_col = df.columns[0]
-
-    df = df[
-        df[first_col].astype(str).str.strip()
-        != first_col
-    ]
+    df.dropna(
+        axis=1,
+        how="all",
+        inplace=True
+    )
 
     # =========================================================
     # CLEAN COLUMN NAMES
@@ -55,6 +56,21 @@ def clean_online(
         str(col).strip()
 
         for col in df.columns
+
+    ]
+
+    # =========================================================
+    # REMOVE DUPLICATE HEADER ROWS
+    # =========================================================
+    first_col = df.columns[0]
+
+    df = df[
+
+        df[first_col]
+        .astype(str)
+        .str.strip()
+
+        != first_col
 
     ]
 
@@ -89,7 +105,7 @@ def clean_online(
     )
 
     # =========================================================
-    # CLEAN TEXT
+    # CLEAN TEXT VALUES
     # =========================================================
     for col in df.columns:
 
@@ -98,6 +114,8 @@ def clean_online(
             df[col] = (
 
                 df[col]
+
+                .fillna("")
 
                 .astype(str)
 
@@ -109,6 +127,8 @@ def clean_online(
     # LIKERT MAP
     # =========================================================
     likert_map = {
+
+        # GENERAL RATINGS
 
         "Excellent": 5,
 
@@ -126,9 +146,13 @@ def clean_online(
 
         "Very Poor": 1,
 
+        # EXTENT RATINGS
+
         "Great Extent": 5,
 
         "To Some Extent": 4,
+
+        "Some Extent": 4,
 
         "Moderate Extent": 3,
 
@@ -141,62 +165,91 @@ def clean_online(
     }
 
     # =========================================================
-    # DETECT QUALITATIVE COLUMNS
+    # NORMALIZE LIKERT RESPONSES
     # =========================================================
-    qualitative_keywords = [
+    normalized_map = {
 
-        "suggest",
+        str(key).strip().lower(): value
 
-        "comment",
+        for key, value
+        in likert_map.items()
 
-        "additional",
+    }
 
-        "topic",
-
-        "interest",
-
-        "improve",
-
-        "experience"
-
-    ]
+    # =========================================================
+    # DETECT RATING COLUMNS
+    # =========================================================
+    rating_cols = []
 
     qualitative_cols = []
 
     for col in df.columns:
 
-        name = str(col).lower()
+        values = (
 
-        if any(
+            df[col]
 
-            keyword in name
+            .dropna()
 
-            for keyword in qualitative_keywords
+            .astype(str)
 
-        ):
+            .str.strip()
+
+        )
+
+        # Ignore empty responses
+        values = values[
+            values != ""
+        ]
+
+        if len(values) == 0:
+
+            qualitative_cols.append(col)
+
+            continue
+
+        # Normalize responses
+        normalized_values = (
+
+            values
+
+            .str.lower()
+
+        )
+
+        # Count Likert responses
+        matching = normalized_values.isin(
+
+            normalized_map.keys()
+
+        ).sum()
+
+        # If majority are Likert responses,
+        # treat column as a rating column
+        if matching >= len(values) * 0.5:
+
+            rating_cols.append(col)
+
+        else:
 
             qualitative_cols.append(col)
 
     # =========================================================
     # CONVERT RATING COLUMNS
     # =========================================================
-    rating_cols = [
-
-        col
-
-        for col in df.columns
-
-        if col not in qualitative_cols
-
-    ]
-
     for col in rating_cols:
 
         df[col] = (
 
             df[col]
 
-            .replace(likert_map)
+            .astype(str)
+
+            .str.strip()
+
+            .str.lower()
+
+            .map(normalized_map)
 
         )
 
@@ -209,7 +262,7 @@ def clean_online(
         )
 
     # =========================================================
-    # SAVE
+    # SAVE CLEANED FILE
     # =========================================================
     base_name = os.path.splitext(
 
@@ -233,19 +286,43 @@ def clean_online(
 
     )
 
-    print("=" * 40)
-    print("ONLINE CLEANING COMPLETED")
-    print("=" * 40)
+    # =========================================================
+    # OUTPUT SUMMARY
+    # =========================================================
+    print("=" * 50)
 
-    print(f"Rows    : {df.shape[0]}")
-    print(f"Columns : {df.shape[1]}")
+    print(
+        "ONLINE CLEANING COMPLETED"
+    )
+
+    print("=" * 50)
+
+    print(
+        f"Rows    : {df.shape[0]}"
+    )
+
+    print(
+        f"Columns : {df.shape[1]}"
+    )
+
+    print("\nRating Columns:")
+
+    for col in rating_cols:
+
+        print(
+            f"- {col}"
+        )
 
     print("\nQualitative Columns:")
 
     for col in qualitative_cols:
 
-        print(f"- {col}")
+        print(
+            f"- {col}"
+        )
 
-    print(f"\nSaved to: {output_file}")
+    print(
+        f"\nSaved to: {output_file}"
+    )
 
     return output_file

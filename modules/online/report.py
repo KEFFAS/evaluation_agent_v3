@@ -32,21 +32,32 @@ def set_table_borders(table):
     borders = OxmlElement("w:tblBorders")
 
     for border_name in [
-
         "top",
         "left",
         "bottom",
         "right",
         "insideH",
         "insideV"
-
     ]:
 
-        border = OxmlElement(f"w:{border_name}")
+        border = OxmlElement(
+            f"w:{border_name}"
+        )
 
-        border.set(qn("w:val"), "single")
-        border.set(qn("w:sz"), "8")
-        border.set(qn("w:color"), "000000")
+        border.set(
+            qn("w:val"),
+            "single"
+        )
+
+        border.set(
+            qn("w:sz"),
+            "8"
+        )
+
+        border.set(
+            qn("w:color"),
+            "000000"
+        )
 
         borders.append(border)
 
@@ -58,90 +69,398 @@ def set_table_borders(table):
 # =========================================================
 def generate_text(prompt):
 
-    response = client.chat.completions.create(
+    try:
 
-        model="gpt-5-nano-2025-08-07",
+        response = client.chat.completions.create(
 
-        messages=[
+            model="gpt-5-nano-2025-08-07",
 
-            {
+            messages=[
 
-                "role":"system",
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an institutional Monitoring and "
+                        "Evaluation Officer writing formal Kenya "
+                        "School of Government evaluation reports. "
+                        "Write professionally, concisely and in an "
+                        "evidence-based human tone. Avoid exaggerated "
+                        "claims, repetition and generic AI language."
+                    )
+                },
 
-                "content":
+                {
+                    "role": "user",
+                    "content": prompt
+                }
 
-                "You are an institutional monitoring and evaluation officer "
-                "writing formal Kenya School of Government evaluation reports. "
-                "Write in a professional, concise, evidence-based and human tone. "
-                "Avoid exaggerated language, repetition and generic AI wording."
-
-            },
-
-            {
-
-                "role":"user",
-
-                "content":prompt
-
-            }
-
-        ]
-
-    )
-
-    return response.choices[0].message.content.strip()
-
-
-# =========================================================
-# TABLE FUNCTION
-# =========================================================
-def add_percentage_table(
-    doc,
-    df,
-    column_name,
-    labels
-):
-
-    table = doc.add_table(
-        rows=1,
-        cols=2
-    )
-
-    table.rows[0].cells[0].text = "Rating"
-    table.rows[0].cells[1].text = "Percentage of Respondents"
-
-    counts = df[column_name].value_counts().to_dict()
-
-    total = sum(counts.values())
-
-    percentages = {}
-
-    for score in [5,4,3,2,1]:
-
-        pct = (
-
-            round(
-
-                counts.get(score,0)/total*100,
-
-                1
-
-            )
-
-            if total>0 else 0
+            ]
 
         )
 
-        percentages[score]=pct
+        return (
+            response.choices[0]
+            .message.content
+            .strip()
+        )
 
-        row=table.add_row().cells
+    except Exception as e:
 
-        row[0].text=labels[score]
-        row[1].text=str(pct)
+        print(f"LLM Error: {e}")
+
+        return (
+            "The findings provide evidence on participant "
+            "assessment of the programme and highlight areas "
+            "for continued improvement."
+        )
+
+
+# =========================================================
+# READ ANALYSIS SHEET
+# =========================================================
+def read_analysis_sheet(
+    analysis_file,
+    sheet_name
+):
+
+    try:
+
+        return pd.read_excel(
+            analysis_file,
+            sheet_name=sheet_name
+        )
+
+    except Exception as e:
+
+        print(
+            f"Could not read sheet "
+            f"'{sheet_name}': {e}"
+        )
+
+        return pd.DataFrame()
+
+
+# =========================================================
+# FIND SHEET
+# =========================================================
+def find_sheet_name(
+    analysis_file,
+    keyword
+):
+
+    excel_file = pd.ExcelFile(
+        analysis_file
+    )
+
+    for sheet in excel_file.sheet_names:
+
+        if keyword.lower() in sheet.lower():
+
+            return sheet
+
+    return None
+
+
+# =========================================================
+# FORMAT NUMBER
+# =========================================================
+def format_number(value):
+
+    if pd.isna(value):
+
+        return "0"
+
+    try:
+
+        value = float(value)
+
+        if value.is_integer():
+
+            return str(
+                int(value)
+            )
+
+        return str(
+            round(value, 2)
+        )
+
+    except Exception:
+
+        return str(value)
+
+
+# =========================================================
+# GET TOTAL RESPONDENTS
+# =========================================================
+def get_total_respondents(df):
+
+    if df.empty:
+
+        return 0
+
+    if "Total" in df.columns:
+
+        try:
+
+            return int(
+                df["Total"]
+                .dropna()
+                .max()
+            )
+
+        except Exception:
+
+            pass
+
+    return 0
+
+
+# =========================================================
+# ADD SINGLE RATING TABLE
+# =========================================================
+def add_single_rating_table(
+    doc,
+    data,
+    title,
+    labels
+):
+
+    if data.empty:
+
+        doc.add_paragraph(
+            "No data was available for this section."
+        )
+
+        return
+
+    row_data = data.iloc[0]
+
+    total = get_total_respondents(
+        data
+    )
+
+    doc.add_paragraph(
+        f"Total Respondents: {total}"
+    )
+
+    table = doc.add_table(
+        rows=1,
+        cols=7
+    )
+
+    headers = [
+
+        title,
+
+        f"5 - {labels[5]}",
+
+        f"4 - {labels[4]}",
+
+        f"3 - {labels[3]}",
+
+        f"2 - {labels[2]}",
+
+        f"1 - {labels[1]}",
+
+        "MEAN"
+
+    ]
+
+    for i, header in enumerate(headers):
+
+        table.rows[0].cells[i].text = (
+            str(header)
+        )
+
+    # =====================================================
+    # RESULTS ROW
+    # =====================================================
+    row = table.add_row().cells
+
+    row[0].text = title
+
+    row[1].text = format_number(
+        row_data.get("5", 0)
+    )
+
+    row[2].text = format_number(
+        row_data.get("4", 0)
+    )
+
+    row[3].text = format_number(
+        row_data.get("3", 0)
+    )
+
+    row[4].text = format_number(
+        row_data.get("2", 0)
+    )
+
+    row[5].text = format_number(
+        row_data.get("1", 0)
+    )
+
+    row[6].text = format_number(
+        row_data.get("Mean", 0)
+    )
+
+    # =====================================================
+    # COMPOSITE SCORE
+    # =====================================================
+    composite_row = (
+        table.add_row().cells
+    )
+
+    composite_row[0].text = (
+        "COMPOSITE SCORE (%)"
+    )
+
+    composite_row[6].text = (
+
+        f"{format_number(row_data.get('Composite Score (%)', 0))}%"
+
+    )
 
     set_table_borders(table)
 
-    return percentages
+
+# =========================================================
+# ADD SPECIFIC ASPECTS TABLE
+# =========================================================
+def add_specific_aspects_table(
+    doc,
+    data
+):
+
+    if data.empty:
+
+        doc.add_paragraph(
+            "No data was available for this section."
+        )
+
+        return 0, 0
+
+    total = get_total_respondents(
+        data
+    )
+
+    doc.add_paragraph(
+        f"Total Respondents: {total}"
+    )
+
+    table = doc.add_table(
+        rows=1,
+        cols=7
+    )
+
+    headers = [
+
+        "SPECIFIC ASPECTS",
+
+        "5 - Excellent",
+
+        "4 - Very Good",
+
+        "3 - Satisfactory",
+
+        "2 - Poor",
+
+        "1 - Very Poor",
+
+        "MEAN"
+
+    ]
+
+    for i, header in enumerate(headers):
+
+        table.rows[0].cells[i].text = (
+            header
+        )
+
+    # =====================================================
+    # ASPECT ROWS
+    # =====================================================
+    for _, item in data.iterrows():
+
+        row = table.add_row().cells
+
+        row[0].text = str(
+            item.get(
+                "Specific Aspect",
+                ""
+            )
+        )
+
+        row[1].text = format_number(
+            item.get("5", 0)
+        )
+
+        row[2].text = format_number(
+            item.get("4", 0)
+        )
+
+        row[3].text = format_number(
+            item.get("3", 0)
+        )
+
+        row[4].text = format_number(
+            item.get("2", 0)
+        )
+
+        row[5].text = format_number(
+            item.get("1", 0)
+        )
+
+        row[6].text = format_number(
+            item.get("Mean", 0)
+        )
+
+    # =====================================================
+    # OVERALL MEAN
+    # =====================================================
+    section_mean = round(
+        pd.to_numeric(
+            data["Mean"],
+            errors="coerce"
+        ).mean(),
+        2
+    )
+
+    section_composite = round(
+        (section_mean / 5) * 100,
+        1
+    )
+
+    mean_row = table.add_row().cells
+
+    mean_row[0].text = (
+        "OVERALL MEAN"
+    )
+
+    mean_row[6].text = str(
+        section_mean
+    )
+
+    # =====================================================
+    # COMPOSITE
+    # =====================================================
+    composite_row = (
+        table.add_row().cells
+    )
+
+    composite_row[0].text = (
+        "COMPOSITE SCORE (%)"
+    )
+
+    composite_row[6].text = (
+        f"{section_composite}%"
+    )
+
+    set_table_borders(table)
+
+    return (
+        section_mean,
+        section_composite
+    )
 
 
 # =========================================================
@@ -149,51 +468,56 @@ def add_percentage_table(
 # =========================================================
 def get_qualitative_text(
     df,
-    columns,
     keyword
 ):
 
-    matching_cols=[
+    matching_cols = [
 
         col
 
-        for col in columns
+        for col in df.columns
 
-        if keyword in col.lower()
+        if keyword.lower()
+        in str(col).lower()
 
     ]
 
-    if matching_cols:
+    if not matching_cols:
 
-        col=matching_cols[0]
+        return ""
 
-        responses=(
+    col = matching_cols[0]
 
-            df[col]
+    responses = (
 
-            .dropna()
+        df[col]
+        .dropna()
+        .astype(str)
+        .str.strip()
 
-            .astype(str)
+    )
 
-            .str.strip()
+    responses = responses[
+        responses != ""
+    ]
 
-        )
+    responses = list(
+        dict.fromkeys(responses)
+    )
 
-        responses=responses[responses!=""]
-
-        responses=list(dict.fromkeys(responses))
-
-        return " ".join(responses)
-
-    return ""
+    return " ".join(
+        responses
+    )
 
 
 # =========================================================
-# REPORT FUNCTION
+# MAIN REPORT FUNCTION
 # =========================================================
 def generate_online_report(
 
     cleaned_file,
+
+    analysis_file,
 
     programme_title,
 
@@ -217,48 +541,205 @@ def generate_online_report(
     )
 
     # =====================================================
-    # LOAD DATA
+    # LOAD CLEANED DATA
     # =====================================================
-    df = pd.read_excel(
+    cleaned_df = pd.read_excel(
+        cleaned_file
+    )
 
-        cleaned_file,
+    # =====================================================
+    # FIND ANALYSIS SHEETS
+    # =====================================================
+    overall_sheet = find_sheet_name(
+        analysis_file,
+        "Overall Summary"
+    )
 
-        engine="openpyxl"
+    objectives_sheet = find_sheet_name(
+        analysis_file,
+        "Course Objectives"
+    )
+
+    expectations_sheet = find_sheet_name(
+        analysis_file,
+        "Fulfilment"
+    )
+
+    aspects_sheet = find_sheet_name(
+        analysis_file,
+        "Specific Aspects"
+    )
+
+    future_sheet = find_sheet_name(
+        analysis_file,
+        "Future Attendance"
+    )
+
+    recommend_sheet = find_sheet_name(
+        analysis_file,
+        "Recommend KSG"
+    )
+
+    # =====================================================
+    # READ SHEETS
+    # =====================================================
+    overall_df = (
+
+        read_analysis_sheet(
+            analysis_file,
+            overall_sheet
+        )
+
+        if overall_sheet
+
+        else pd.DataFrame()
 
     )
 
-    columns=df.columns.tolist()
+    objectives_df = (
+
+        read_analysis_sheet(
+            analysis_file,
+            objectives_sheet
+        )
+
+        if objectives_sheet
+
+        else pd.DataFrame()
+
+    )
+
+    expectations_df = (
+
+        read_analysis_sheet(
+            analysis_file,
+            expectations_sheet
+        )
+
+        if expectations_sheet
+
+        else pd.DataFrame()
+
+    )
+
+    aspects_df = (
+
+        read_analysis_sheet(
+            analysis_file,
+            aspects_sheet
+        )
+
+        if aspects_sheet
+
+        else pd.DataFrame()
+
+    )
+
+    future_df = (
+
+        read_analysis_sheet(
+            analysis_file,
+            future_sheet
+        )
+
+        if future_sheet
+
+        else pd.DataFrame()
+
+    )
+
+    recommend_df = (
+
+        read_analysis_sheet(
+            analysis_file,
+            recommend_sheet
+        )
+
+        if recommend_sheet
+
+        else pd.DataFrame()
+
+    )
+
+    # =====================================================
+    # OVERALL SCORE
+    # =====================================================
+    overall_mean = 0
+    overall_composite = 0
+
+    if not overall_df.empty:
+
+        overall_row = overall_df[
+
+            overall_df[
+                "Evaluation Area"
+            ].astype(str)
+            .str.contains(
+                "OVERALL",
+                case=False,
+                na=False
+            )
+
+        ]
+
+        if not overall_row.empty:
+
+            overall_mean = float(
+
+                overall_row.iloc[0][
+                    "Mean Score"
+                ]
+
+            )
+
+            overall_composite = float(
+
+                overall_row.iloc[0][
+                    "Composite Score (%)"
+                ]
+
+            )
 
     # =====================================================
     # CREATE DOCUMENT
     # =====================================================
-    doc=Document()
+    doc = Document()
 
-    style=doc.styles["Normal"]
+    style = doc.styles["Normal"]
 
-    style.font.name="Times New Roman"
+    style.font.name = (
+        "Times New Roman"
+    )
 
-    style.font.size=Pt(11)
+    style.font.size = Pt(11)
 
     # =====================================================
     # HEADER
     # =====================================================
-    doc.add_paragraph("KSG/17/EOEEF/07")
+    doc.add_paragraph(
+        "KSG/17/EOEEF/07"
+    )
 
     p = doc.add_paragraph()
 
-    p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    p.alignment = (
+        WD_PARAGRAPH_ALIGNMENT.CENTER
+    )
 
     run = p.add_run(
 
         "KENYA SCHOOL OF GOVERNMENT\n"
         "MATUGA\n\n"
-        "END-OF-EVENT EVALUATION REPORT"
+        "ONLINE END-OF-EVENT EVALUATION REPORT"
 
     )
 
     run.bold = True
-    run.font.name = "Times New Roman"
+
+    run.font.name = (
+        "Times New Roman"
+    )
+
     run.font.size = Pt(16)
 
     # =====================================================
@@ -269,25 +750,92 @@ def generate_online_report(
         cols=4
     )
 
-    details_table.cell(0,0).text = "PROGRAMME TITLE:"
-    details_table.cell(0,1).text = programme_title
+    details = [
 
-    details_table.cell(0,2).text = "DURATION:"
-    details_table.cell(0,3).text = duration
+        (
+            0,
+            0,
+            "PROGRAMME TITLE:"
+        ),
 
-    details_table.cell(1,0).text = "PROGRAMME CODE:"
-    details_table.cell(1,1).text = programme_code
+        (
+            0,
+            1,
+            programme_title
+        ),
 
-    details_table.cell(1,2).text = "VENUE:"
-    details_table.cell(1,3).text = venue
+        (
+            0,
+            2,
+            "DURATION:"
+        ),
 
-    details_table.cell(2,0).text = "COORDINATOR:"
-    details_table.cell(2,1).text = coordinator
+        (
+            0,
+            3,
+            duration
+        ),
 
-    details_table.cell(2,2).text = "PROGRAM ASSISTANT:"
-    details_table.cell(2,3).text = assistant
+        (
+            1,
+            0,
+            "PROGRAMME CODE:"
+        ),
 
-    set_table_borders(details_table)
+        (
+            1,
+            1,
+            programme_code
+        ),
+
+        (
+            1,
+            2,
+            "VENUE:"
+        ),
+
+        (
+            1,
+            3,
+            venue
+        ),
+
+        (
+            2,
+            0,
+            "COORDINATOR:"
+        ),
+
+        (
+            2,
+            1,
+            coordinator
+        ),
+
+        (
+            2,
+            2,
+            "PROGRAM ASSISTANT:"
+        ),
+
+        (
+            2,
+            3,
+            assistant
+        )
+
+    ]
+
+    for row, col, value in details:
+
+        details_table.cell(
+            row,
+            col
+        ).text = str(value)
+
+    set_table_borders(
+        details_table
+    )
 
     # =====================================================
     # INTRODUCTION
@@ -299,573 +847,523 @@ def generate_online_report(
 
     doc.add_paragraph(
 
-        "KSG conducted a programme evaluation to assess the quality, "
-        "relevance and effectiveness of the training. Participants "
-        "provided feedback on key aspects of the programme including "
-        "content, delivery and coordination. The findings will inform "
-        "continuous improvement and enhance future programme delivery."
-
-    )
-
-    # =====================================================
-    # DETECT IMPORTANT COLUMNS
-    # =====================================================
-    objective_col = next(
-
-        (
-
-            col
-
-            for col in columns
-
-            if "objective" in col.lower()
-
-        ),
-
-        None
-
-    )
-
-    expectation_col = next(
-
-        (
-
-            col
-
-            for col in columns
-
-            if "expectation" in col.lower()
-
-        ),
-
-        None
-
-    )
-
-    future_col = next(
-
-        (
-
-            col
-
-            for col in columns
-
-            if (
-
-                "attend another online training" in col.lower()
-
-                or
-
-                "future online training" in col.lower()
-
-                or
-
-                "attending future" in col.lower()
-
-            )
-
-        ),
-
-        None
-
-    )
-
-    recommend_col = next(
-
-        (
-
-            col
-
-            for col in columns
-
-            if (
-
-                "recommend ksg online learning" in col.lower()
-
-                or
-
-                "colleagues/friends" in col.lower()
-
-                or
-
-                "recommend" in col.lower()
-
-            )
-
-        ),
-
-        None
+        "The Kenya School of Government conducted an "
+        "online end-of-event evaluation to assess participant "
+        "perceptions of the quality, relevance and effectiveness "
+        "of the training programme. The evaluation focused on "
+        "achievement of course objectives, fulfilment of "
+        "expectations, specific aspects of programme delivery, "
+        "future participation and willingness to recommend "
+        "KSG online learning."
 
     )
 
     # =====================================================
     # SECTION 1
+    # OVERALL SUMMARY
     # =====================================================
     doc.add_heading(
-        "1. Course Objectives Achievement",
+        "1. Overall Evaluation Summary",
         level=2
     )
 
-    pct1 = add_percentage_table(
+    if not overall_df.empty:
 
-        doc,
+        summary_table = doc.add_table(
+            rows=1,
+            cols=3
+        )
 
-        df,
+        headers = [
 
-        objective_col,
+            "EVALUATION AREA",
 
-        {
+            "MEAN SCORE",
 
-            5:"Excellent",
+            "COMPOSITE SCORE (%)"
 
-            4:"Very Good",
+        ]
 
-            3:"Satisfactory",
+        for i, header in enumerate(headers):
 
-            2:"Poor",
+            summary_table.rows[0].cells[i].text = (
+                header
+            )
 
-            1:"Very Poor"
+        for _, item in overall_df.iterrows():
 
-        }
+            row = summary_table.add_row().cells
 
-    )
+            row[0].text = str(
+                item.get(
+                    "Evaluation Area",
+                    ""
+                )
+            )
 
-    prompt = f"""
-Write one short professional interpretation for these results.
+            row[1].text = format_number(
+                item.get(
+                    "Mean Score",
+                    0
+                )
+            )
 
-Excellent: {pct1[5]}%
-Very Good: {pct1[4]}%
-Satisfactory: {pct1[3]}%
-Poor: {pct1[2]}%
-Very Poor: {pct1[1]}%
+            row[2].text = (
 
-Focus on achievement of course objectives.
+                f"{format_number(item.get('Composite Score (%)', 0))}%"
+
+            )
+
+        set_table_borders(
+            summary_table
+        )
+
+    summary_prompt = f"""
+Interpret the following overall results from a
+Kenya School of Government online training
+programme.
+
+Overall Mean Score:
+{overall_mean}
+
+Overall Composite Score:
+{overall_composite}%
+
+Write ONE concise institutional paragraph.
+
+Mention the overall performance level and major
+strengths. Mention areas requiring attention only
+where supported by the evaluation results.
+Do not exaggerate.
 """
 
     doc.add_paragraph(
-        generate_text(prompt)
+        generate_text(
+            summary_prompt
+        )
     )
 
     # =====================================================
     # SECTION 2
+    # COURSE OBJECTIVES
     # =====================================================
     doc.add_heading(
-        "2. Fulfilment of Personal Expectations",
+        "2. Course Objectives Achievement",
         level=2
     )
 
-    pct2 = add_percentage_table(
+    objective_labels = {
 
-        doc,
+        5: "Excellent",
 
-        df,
+        4: "Very Good",
 
-        expectation_col,
+        3: "Satisfactory",
 
-        {
+        2: "Poor",
 
-            5:"5 - Great Extent",
-
-            4:"4 - Some Extent",
-
-            3:"3 - Satisfactory",
-
-            2:"2 - Not Sure",
-
-            1:"1 - Not At All"
-
-        }
-
-    )
-
-    prompt = f"""
-Write one concise institutional paragraph interpreting these results.
-
-Great Extent: {pct2[5]}%
-Some Extent: {pct2[4]}%
-Satisfactory: {pct2[3]}%
-Not Sure: {pct2[2]}%
-Not At All: {pct2[1]}%
-
-Focus on fulfilment of participant expectations.
-"""
-
-    doc.add_paragraph(
-        generate_text(prompt)
-    )
-
-    # =====================================================
-    # SECTION 3
-    # =====================================================
-    doc.add_heading(
-        "3. Please rate the following aspects of the training programme:",
-        level=2
-    )
-
-    table3 = doc.add_table(
-        rows=2,
-        cols=6
-    )
-
-    headers1 = [
-
-        "ASPECT OF THE PROGRAMME",
-
-        "Excellent %",
-
-        "Very Good %",
-
-        "Satisfactory %",
-
-        "Poor %",
-
-        "Very Poor %"
-
-    ]
-
-    headers2 = [
-
-        "",
-
-        "5",
-
-        "4",
-
-        "3",
-
-        "2",
-
-        "1"
-
-    ]
-
-    for i, value in enumerate(headers1):
-
-        table3.rows[0].cells[i].text = value
-
-    for i, value in enumerate(headers2):
-
-        table3.rows[1].cells[i].text = value
-
-    # =====================================================
-    # IDENTIFY RATING COLUMNS
-    # =====================================================
-    exclude_cols = [
-
-        objective_col,
-
-        expectation_col,
-
-        future_col,
-
-        recommend_col
-
-    ]
-
-    exclude_keywords = [
-
-        "response",
-
-        "number"
-
-    ]
-
-    rating_cols = []
-
-    for col in columns:
-
-        if col not in exclude_cols:
-
-            if pd.api.types.is_numeric_dtype(df[col]):
-
-                if not any(
-
-                    keyword in col.lower()
-
-                    for keyword in exclude_keywords
-
-                ):
-
-                    rating_cols.append(col)
-
-    # =====================================================
-    # DISPLAY LABELS
-    # =====================================================
-    display_labels = {
-
-        "How do you rate course organisation and co-ordination":
-        "Course organisation and coordination",
-
-        "How do you rate content of training programme":
-        "Content of training programme",
-
-        "How do you rate relevance of training programme/Course to your Job":
-        "Relevance of training programme",
-
-        "How do you rate quality of training/facilitation and learning materials":
-        "Quality of training/facilitation and learning materials",
-
-        "How do you rate the appropriateness of duration of programme(length of course)":
-        "Appropriateness of duration of programme",
-
-        "How do you rate the appropriateness of online training platform":
-        "Appropriateness of online training platform",
-
-        "How do you rate the technical supoport given during the course":
-        "Technical support during the course"
+        1: "Very Poor"
 
     }
 
-    # =====================================================
-    # POPULATE TABLE
-    # =====================================================
-    for col in rating_cols:
+    add_single_rating_table(
 
-        counts = df[col].value_counts().to_dict()
+        doc,
 
-        total = sum(counts.values())
+        objectives_df,
 
-        excellent = round((counts.get(5,0)/total)*100,1) if total else 0
-        very_good = round((counts.get(4,0)/total)*100,1) if total else 0
-        satisfactory = round((counts.get(3,0)/total)*100,1) if total else 0
-        poor = round((counts.get(2,0)/total)*100,1) if total else 0
-        very_poor = round((counts.get(1,0)/total)*100,1) if total else 0
+        "COURSE OBJECTIVES ACHIEVEMENT",
 
-        row = table3.add_row().cells
-
-        row[0].text = display_labels.get(col, col)
-        row[1].text = str(excellent)
-        row[2].text = str(very_good)
-        row[3].text = str(satisfactory)
-        row[4].text = str(poor)
-        row[5].text = str(very_poor)
-
-    set_table_borders(table3)
-
-    section3_prompt = """
-Write one concise professional paragraph interpreting the overall ratings.
-
-Highlight:
-- Overall strengths
-- Areas that received comparatively lower ratings
-- Overall participant satisfaction
-
-Use institutional Kenya School of Government reporting style.
-"""
-
-    doc.add_paragraph(
-
-        generate_text(section3_prompt)
+        objective_labels
 
     )
+
+    if not objectives_df.empty:
+
+        item = objectives_df.iloc[0]
+
+        prompt = f"""
+Interpret these results on Course Objectives Achievement.
+
+Mean Score:
+{item.get('Mean', 0)}
+
+Composite Score:
+{item.get('Composite Score (%)', 0)}%
+
+Write ONE concise professional paragraph.
+"""
+
+        doc.add_paragraph(
+            generate_text(prompt)
+        )
+
+    # =====================================================
+    # SECTION 3
+    # PERSONAL EXPECTATIONS
+    # =====================================================
+    doc.add_heading(
+        "3. Fulfilment of Personal Expectations",
+        level=2
+    )
+
+    expectation_labels = {
+
+        5: "Great Extent",
+
+        4: "Some Extent",
+
+        3: "Satisfactory",
+
+        2: "Not Sure",
+
+        1: "Not At All"
+
+    }
+
+    add_single_rating_table(
+
+        doc,
+
+        expectations_df,
+
+        "FULFILMENT OF PERSONAL EXPECTATIONS",
+
+        expectation_labels
+
+    )
+
+    if not expectations_df.empty:
+
+        item = expectations_df.iloc[0]
+
+        prompt = f"""
+Interpret these results on fulfilment of
+participant expectations.
+
+Mean Score:
+{item.get('Mean', 0)}
+
+Composite Score:
+{item.get('Composite Score (%)', 0)}%
+
+Write ONE concise institutional paragraph.
+"""
+
+        doc.add_paragraph(
+            generate_text(prompt)
+        )
 
     # =====================================================
     # SECTION 4
+    # SPECIFIC ASPECTS
     # =====================================================
     doc.add_heading(
-        "4. Likelihood of Attending Future Online Training Sessions at KSG",
+
+        "4. Ratings on Specific Aspects of the Online Training Programme",
+
         level=2
-    )
-
-    pct4 = add_percentage_table(
-
-        doc,
-
-        df,
-
-        future_col,
-
-        {
-
-            5:"5 - Great Extent",
-
-            4:"4 - Some Extent",
-
-            3:"3 - Satisfactory",
-
-            2:"2 - Not Sure",
-
-            1:"1 - Not At All"
-
-        }
 
     )
 
-    prompt = f"""
-Interpret these findings professionally.
+    aspects_mean, aspects_composite = (
+        add_specific_aspects_table(
+            doc,
+            aspects_df
+        )
+    )
 
-Great Extent: {pct4[5]}%
-Some Extent: {pct4[4]}%
-Satisfactory: {pct4[3]}%
-Not Sure: {pct4[2]}%
-Not At All: {pct4[1]}%
+    if not aspects_df.empty:
 
-Focus on participants' willingness to attend future KSG online programmes.
+        findings = []
+
+        for _, item in aspects_df.iterrows():
+
+            findings.append(
+
+                f"{item.get('Specific Aspect', '')}: "
+                f"Mean {item.get('Mean', 0)}, "
+                f"Composite "
+                f"{item.get('Composite Score (%)', 0)}%"
+
+            )
+
+        prompt = f"""
+Interpret the following specific aspect ratings
+from a Kenya School of Government online training
+programme:
+
+{chr(10).join(findings)}
+
+Overall Mean:
+{aspects_mean}
+
+Overall Composite Score:
+{aspects_composite}%
+
+Write ONE concise institutional paragraph.
+
+Identify major strengths and comparatively
+lower-rated areas strictly based on the data.
+Do not exaggerate or repeat every score.
 """
 
-    doc.add_paragraph(
-
-        generate_text(prompt)
-
-    )
+        doc.add_paragraph(
+            generate_text(prompt)
+        )
 
     # =====================================================
     # SECTION 5
+    # FUTURE ATTENDANCE
     # =====================================================
     doc.add_heading(
-        "5. Willingness to Recommend KSG Online Learning to Colleagues and Friends",
+
+        "5. Likelihood of Attending Future Online Training Sessions at KSG",
+
         level=2
+
     )
 
-    pct5 = add_percentage_table(
+    future_labels = {
+
+        5: "Great Extent",
+
+        4: "Some Extent",
+
+        3: "Satisfactory",
+
+        2: "Not Sure",
+
+        1: "Not At All"
+
+    }
+
+    add_single_rating_table(
 
         doc,
 
-        df,
+        future_df,
 
-        recommend_col,
+        "LIKELIHOOD OF FUTURE ATTENDANCE",
 
-        {
-
-            5:"5 - Great Extent",
-
-            4:"4 - Some Extent",
-
-            3:"3 - Satisfactory",
-
-            2:"2 - Not Sure",
-
-            1:"1 - Not At All"
-
-        }
+        future_labels
 
     )
 
-    prompt = f"""
-Interpret these findings professionally.
+    if not future_df.empty:
 
-Great Extent: {pct5[5]}%
-Some Extent: {pct5[4]}%
-Satisfactory: {pct5[3]}%
-Not Sure: {pct5[2]}%
-Not At All: {pct5[1]}%
+        item = future_df.iloc[0]
 
-Focus on participants' willingness to recommend KSG online learning.
+        prompt = f"""
+Interpret these results regarding willingness to
+attend future KSG online training programmes.
+
+Mean Score:
+{item.get('Mean', 0)}
+
+Composite Score:
+{item.get('Composite Score (%)', 0)}%
+
+Write ONE concise professional paragraph.
 """
 
-    doc.add_paragraph(
+        doc.add_paragraph(
+            generate_text(prompt)
+        )
 
-        generate_text(prompt)
+    # =====================================================
+    # SECTION 6
+    # RECOMMEND KSG
+    # =====================================================
+    doc.add_heading(
+
+        "6. Willingness to Recommend KSG Online Learning to Colleagues and Friends",
+
+        level=2
 
     )
+
+    recommend_labels = {
+
+        5: "Great Extent",
+
+        4: "Some Extent",
+
+        3: "Satisfactory",
+
+        2: "Not Sure",
+
+        1: "Not At All"
+
+    }
+
+    add_single_rating_table(
+
+        doc,
+
+        recommend_df,
+
+        "WILLINGNESS TO RECOMMEND KSG ONLINE LEARNING",
+
+        recommend_labels
+
+    )
+
+    if not recommend_df.empty:
+
+        item = recommend_df.iloc[0]
+
+        prompt = f"""
+Interpret these results regarding participants'
+willingness to recommend KSG online learning.
+
+Mean Score:
+{item.get('Mean', 0)}
+
+Composite Score:
+{item.get('Composite Score (%)', 0)}%
+
+Write ONE concise professional paragraph.
+"""
+
+        doc.add_paragraph(
+            generate_text(prompt)
+        )
+
     # =====================================================
-    # SECTIONS 6–9 (QUALITATIVE FEEDBACK)
+    # QUALITATIVE SECTIONS
     # =====================================================
     qualitative_sections = [
 
         (
-            "6. Suggestions for Improving KSG eLearning Courses and Enhancing Participants' Learning Experiences",
+            "7. Suggestions for Improving KSG eLearning Courses and Enhancing Participants' Learning Experiences",
             "improv"
         ),
 
         (
-            "7. Additional Comments and Suggestions on the Training Programme",
+            "8. Additional Comments and Suggestions on the Training Programme",
             "comment"
         ),
 
         (
-            "8. Recommended Additional Topics for Inclusion in the Training Programme",
+            "9. Recommended Additional Topics for Inclusion in the Training Programme",
             "topic"
         ),
 
         (
-            "9. Additional Training Programmes of Interest",
+            "10. Additional Training Programmes of Interest",
             "interest"
         )
 
     ]
 
+    qualitative_data = {}
+
     for title, keyword in qualitative_sections:
 
         raw_text = get_qualitative_text(
-
-            df,
-
-            columns,
-
+            cleaned_df,
             keyword
-
         )
 
+        qualitative_data[keyword] = raw_text
+
         doc.add_heading(
-
             title,
-
             level=2
-
         )
 
         if raw_text.strip():
 
             prompt = f"""
-You are an institutional Monitoring and Evaluation Officer at the Kenya School of Government.
+The following are participant responses from an
+online Kenya School of Government training
+evaluation:
 
-The following are participant responses from an online training evaluation.
-
-Responses:
 {raw_text}
 
 Write ONE concise institutional paragraph that:
 
-- Summarizes the main recurring themes.
-- Uses professional but natural language.
+- Summarizes recurring themes.
+- Uses professional and natural language.
 - Avoids bullets.
 - Avoids repetition.
 - Reflects only what participants said.
-- Sounds suitable for inclusion in an official evaluation report.
+- Does not invent information.
 """
 
             doc.add_paragraph(
-
                 generate_text(prompt)
-
             )
 
         else:
 
             doc.add_paragraph(
-
                 "No responses were provided for this section."
-
             )
 
     # =====================================================
-    # SECTION 10
+    # SECTION 11
+    # KEY INSIGHTS AND RECOMMENDATIONS
     # =====================================================
     doc.add_heading(
-
-        "10. Key Insights and Recommendations",
-
+        "11. Key Insights and Recommendations",
         level=2
+    )
+
+    quantitative_findings = ""
+
+    if not overall_df.empty:
+
+        for _, item in overall_df.iterrows():
+
+            quantitative_findings += (
+
+                f"{item.get('Evaluation Area', '')}: "
+
+                f"Mean={item.get('Mean Score', 0)}, "
+
+                f"Composite="
+                f"{item.get('Composite Score (%)', 0)}%\n"
+
+            )
+
+    qualitative_findings = "\n\n".join(
+
+        [
+
+            f"{key}: {value}"
+
+            for key, value
+            in qualitative_data.items()
+
+            if value.strip()
+
+        ]
 
     )
 
-    prompt = """
-Using the overall evaluation findings, write:
+    prompt = f"""
+Using ONLY the following findings, prepare Key
+Insights and Recommendations for a Kenya School
+of Government online training evaluation report.
 
-1. Key Insights
-2. Recommendations
+QUANTITATIVE FINDINGS:
 
-Use concise institutional reporting language.
+{quantitative_findings}
 
-Assume the following general findings:
+QUALITATIVE FEEDBACK:
 
-- High participant satisfaction
-- Strong relevance of programme content
-- Positive facilitation and learner engagement
-- Strong willingness to recommend KSG
-- Strong willingness to attend future online programmes
-- Some recommendations on technical support and platform improvements
+{qualitative_findings}
+
+Requirements:
+
+1. Provide 3 to 5 Key Insights.
+2. Provide 3 to 5 Recommendations.
+3. Base everything strictly on the findings.
+4. Do not invent concerns.
+5. Keep recommendations practical.
+6. Use concise institutional language.
 
 Format exactly as:
 
@@ -880,9 +1378,9 @@ Recommendations
 • ...
 """
 
-    response = generate_text(prompt)
-
-    doc.add_paragraph(response)
+    doc.add_paragraph(
+        generate_text(prompt)
+    )
 
     # =====================================================
     # SIGNATURES
@@ -890,52 +1388,41 @@ Recommendations
     doc.add_paragraph()
 
     doc.add_paragraph(
-
         "Prepared by............................................................"
-
     )
 
     doc.add_paragraph(
-
-        "Date............................   Signature............................"
-
+        "Date............................   "
+        "Signature............................"
     )
 
     doc.add_paragraph()
 
     doc.add_paragraph(
-
         "Confirmed by..........................................................."
-
     )
 
     doc.add_paragraph(
-
-        "Date............................   Signature............................"
-
+        "Date............................   "
+        "Signature............................"
     )
 
     doc.add_paragraph()
 
     doc.add_paragraph(
-
         "Approved by............................................................"
-
     )
 
     doc.add_paragraph(
-
-        "Date............................   Signature............................"
-
+        "Date............................   "
+        "Signature............................"
     )
 
     # =====================================================
     # SAVE REPORT
     # =====================================================
     base_name = os.path.splitext(
-
         os.path.basename(cleaned_file)
-
     )[0]
 
     output_file = os.path.join(
@@ -946,12 +1433,15 @@ Recommendations
 
     )
 
-    doc.save(output_file)
+    doc.save(
+        output_file
+    )
 
     print("=" * 60)
     print("ONLINE EEE REPORT GENERATED")
     print("=" * 60)
-
-    print(f"Report saved to: {output_file}")
+    print(
+        f"Report saved to: {output_file}"
+    )
 
     return output_file
