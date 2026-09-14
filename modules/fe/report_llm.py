@@ -1237,7 +1237,7 @@ Suggestions:
         doc.add_paragraph()
 
         doc.add_paragraph(
-            "II. Head of Department – Training's Comments:"
+            "II. Head of Department – RCAS's Comments:"
         )
 
         hod_comment = generate_hod_comment(
@@ -1258,7 +1258,7 @@ Suggestions:
         doc.add_paragraph()
 
         doc.add_paragraph(
-            "III. Head of Department – Training's "
+            "III. Head of Department – RCAS's "
             "Proposals or Recommendations:"
         )
 
@@ -1280,7 +1280,7 @@ Suggestions:
         doc.add_paragraph()
 
         doc.add_paragraph(
-        "IV. Head of Department – Training:"
+        "IV. Head of Department – RCAS:"
        )
 
         doc.add_paragraph()

@@ -1025,7 +1025,7 @@ Suggestions:
 
     doc.add_paragraph(
 
-        "IV. Head of Department – Training's comments:"
+        "IV. Head of Department – RCAS's comments:"
 
     )
 
@@ -1041,7 +1041,7 @@ Suggestions:
 
     doc.add_paragraph(
 
-        "V. Head of Department – Training's proposals or recommendations:"
+        "V. Head of Department – RCAS's proposals or recommendations:"
 
     )
 
@@ -1056,7 +1056,7 @@ Suggestions:
     doc.add_paragraph()
 
     doc.add_paragraph(
-        "Head of Department – Training"
+        "Head of Department – RCAS"
     )
 
     doc.add_paragraph(
