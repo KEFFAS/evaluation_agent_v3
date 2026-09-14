@@ -1,7 +1,7 @@
 from modules.ce.workflow import run_ce
 
 report = run_ce(
-    excel_file=r"uploads\SSDC 61 CE.xlsx",
+    excel_file=r"uploads\SSDC 6 CE.xlsx",
 
     programme_title="Your Programme",
 
